@@ -2,12 +2,11 @@
 This code tries to inject a random fault in the binary file of the ECDSA whitebox. 
 It implements attacks following the terminology of Attacks Against White-Box ECDSA and Discussion of Countermeasures by Bauer et al. (https://eprint.iacr.org/2022/448.pdf)
 """
-
+import argparse
 import os
 import random
 import shutil
 import subprocess
-import sys
 import time
 from typing import List
 
@@ -282,9 +281,7 @@ def recover_key(correct_sigs, faulty_sigs, digests, test_only_F=True) -> List[in
         return []
 
     # first try using F, only needing a couple:
-    for c_r, c_s, f_r, f_s, h in zip(
-        correct_r, correct_s, faulty_r, faulty_s, digests
-    ):
+    for c_r, c_s, f_r, f_s, h in zip(correct_r, correct_s, faulty_r, faulty_s, digests):
         res.append(F(c_r, c_s, f_r, f_s, h))
 
     if not test_only_F:
@@ -330,12 +327,20 @@ def inject_fault(origin_file_name: str, faults):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("challenge_id", help="Challenge identifier to attack", type=int)
 
     # The attack "F" has the highest success rate. Moreover, it only requires one couple of (correct,faulty) signature
     # Consequently, we allow for the possibility to deactivate every other attack.
-    test_only_F = True
+    parser.add_argument(
+        "-f",
+        "--fast",
+        help="Perform only a single attack, with a high probability of success",
+        action="store_true",
+    )
+    args = parser.parse_args()
 
-    pubkey_file = open("challenges/" + sys.argv[1] + "/pubkey")
+    pubkey_file = open(os.path.join("challenges", str(args.challenge_id), "pubkey"))
     pubkey = pubkey_file.readlines()[0]
     print("Target pubkey:", pubkey)
 
@@ -345,7 +350,7 @@ def main():
             "gcc-10",
             "drivers/main_a.c",
             "drivers/mocks.c",
-            os.path.join("challenges", sys.argv[1], "source.c"),
+            os.path.join("challenges", str(args.challenge_id), "source.c"),
             "-o",
             "main_a",
             "-lgmp",
@@ -365,7 +370,7 @@ def main():
     correct_sig1 = correct_out_a
     print("Correct sig1:", correct_sig1)
 
-    if test_only_F:
+    if args.fast:
         correct_out_b = ""
     else:
         digests += [0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB]
@@ -374,7 +379,7 @@ def main():
                 "gcc-10",
                 "drivers/main_b.c",
                 "drivers/mocks.c",
-                os.path.join("challenges", sys.argv[1], "source.c"),
+                os.path.join("challenges", str(args.challenge_id), "source.c"),
                 "-o",
                 "main_b",
                 "-lgmp",
@@ -402,13 +407,13 @@ def main():
 
     if correct_out_a != new_out:
         print("ERROR: Non-deterministic ECDSA!")
-        sys.exit(0)
+        return
 
     # restart with 0 fault, same file name
     correct_out_a = inject_fault(origin_file_name_a, [])
     correct_sigs = [correct_out_a]
 
-    if not test_only_F:
+    if not args.fast:
         correct_out_b = inject_fault(origin_file_name_b, [])
         correct_sigs += [correct_out_b]
 
@@ -428,23 +433,23 @@ def main():
         faulty_out_a = inject_fault(origin_file_name_a, faults)
         faulty_sigs = [faulty_out_a]
 
-        if test_only_F:
+        if args.fast:
             faulty_out_b = ""
         else:
             faulty_out_b = inject_fault(origin_file_name_b, faults)
             faulty_sigs += [faulty_out_a]
 
         if correct_out_a == faulty_out_a and (
-            test_only_F or correct_out_b == faulty_out_b
+            args.fast or correct_out_b == faulty_out_b
         ):
             nb_no_effect += 1
-        elif faulty_out_a == -1 or (not test_only_F and faulty_out_b == -1):
+        elif faulty_out_a == -1 or (not args.fast and faulty_out_b == -1):
             nb_crashes += 1
         else:
             print("FOUND FAULT:", faulty_sigs)
             print("trying to recover the key...")
 
-            dd = recover_key(correct_sigs, faulty_sigs, digests, test_only_F)
+            dd = recover_key(correct_sigs, faulty_sigs, digests, args.fast)
 
             for d in dd:
                 print("Trying", d)
@@ -458,7 +463,7 @@ def main():
                     print("Found private key:", d)
                     print("In hex:", hex(d))
                     print(f"Fault: index={hex(byte_index)}, value={hex(byte_value)}")
-                    sys.exit(0)
+                    return
                 else:
                     print("Nope...")
 
