@@ -1,6 +1,8 @@
 """
-This code tries to inject a random fault in the binary file of the ECDSA whitebox. 
-It implements attacks following the terminology of Attacks Against White-Box ECDSA and Discussion of Countermeasures by Bauer et al. (https://eprint.iacr.org/2022/448.pdf)
+This code tries to inject a random fault in the binary file of the ECDSA whitebox.
+
+It implements attacks following the terminology of Attacks Against White-Box ECDSA and
+Discussion of Countermeasures by Bauer et al. (https://eprint.iacr.org/2022/448.pdf)
 """
 import argparse
 import os
@@ -8,6 +10,7 @@ import random
 import shutil
 import subprocess
 import time
+from dataclasses import dataclass
 from typing import List
 
 from ecdsa.curves import NIST256p
@@ -16,8 +19,18 @@ from ecdsa.ellipticcurve import INFINITY
 PATH = "./"
 
 
+@dataclass
+class Signature:
+    h: int
+    r: int
+    s: int
+
+
 def FDC1(
-    r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
+    good1: Signature,
+    bad1: Signature,
+    good2: Signature,
+    bad2: Signature,
 ) -> int:
     """Differential fault in r, rd, h, rd+h"""
     """
@@ -37,14 +50,21 @@ def FDC1(
         
         <=>  x = (s_good1 * s_bad2 * digest2 - s_good2 * s_bad1 * digest1) / (s_good2 * s_bad1 * r_good1 - s_good1 * s_bad2 * r_good2)
     """
-    num = s_good1 * s_bad2 * digest2 - s_good2 * s_bad1 * digest1
-    denom = s_good2 * s_bad1 * r_good1 - s_good1 * s_bad2 * r_good2
+    assert good1.h == bad1.h and good2.h == bad2.h
+
+    digest1 = good1.h
+    digest2 = good2.h
+    num = good1.s * bad2.s * digest2 - good2.s * bad1.s * digest1
+    denom = good2.s * bad1.s * good1.r - good1.s * bad2.s * good2.r
     n = NIST256p.order
     return (num * pow(denom, -1, n)) % n
 
 
 def FDC2(
-    r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
+    good1: Signature,
+    bad1: Signature,
+    good2: Signature,
+    bad2: Signature,
 ) -> int:
     """Differential fault in k (faulty r returned)"""
     """
@@ -64,18 +84,25 @@ def FDC2(
         <=> x = (digest2 * s_good1 * s_bad1 * (s_good2 - s_bad2) - digest1 * s_good2 * s_bad2 * (s_good1 - s_bad1)) /
                 (s_good2 * s_bad2 * (r_bad1 * s_good1 - r_good1 * s_bad1) - s_good1 * s_bad1 * (r_bad2 * s_good2 - r_good2 * s_bad2))
     """
-    num = digest2 * s_good1 * s_bad1 * (
-        s_good2 - s_bad2
-    ) - digest1 * s_good2 * s_bad2 * (s_good1 - s_bad1)
-    denom = s_good2 * s_bad2 * (
-        r_bad1 * s_good1 - r_good1 * s_bad1
-    ) - s_good1 * s_bad1 * (r_bad2 * s_good2 - r_good2 * s_bad2)
+    assert good1.h == bad1.h and good2.h == bad2.h
+
+    digest1 = good1.h
+    digest2 = good2.h
+    num = digest2 * good1.s * bad1.s * (
+        good2.s - bad2.s
+    ) - digest1 * good2.s * bad2.s * (good1.s - bad1.s)
+    denom = good2.s * bad2.s * (
+        bad1.r * good1.s - good1.r * bad1.s
+    ) - good1.s * bad1.s * (bad2.r * good2.s - good2.r * bad2.s)
     n = NIST256p.order
     return (num * pow(denom, -1, n)) % n
 
 
 def FDC3(
-    r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
+    good1: Signature,
+    bad1: Signature,
+    good2: Signature,
+    bad2: Signature,
 ) -> int:
     """Differential fault in k^-1 (faulty r returned)"""
     """
@@ -90,13 +117,17 @@ def FDC3(
         digest2*(1)-digest1*(2)=> (r_good1 * digest2 - r_good2 * digest1) * x + digest2 * (s_good1 - s_bad1) - digest1 * (s_good2 - s_bad2) = 0
         <=> x = (digest1 * (s_good2 -s_bad2) - digest2 * (s_good1 - s_bad1)) / (r_good1 * digest2 - r_good2 * digest1)
     """
-    num = digest1 * (s_good2 - s_bad2) - digest2 * (s_good1 - s_bad1)
-    denom = r_good1 * digest2 - r_good2 * digest1
+    assert good1.h == bad1.h and good2.h == bad2.h
+
+    digest1 = good1.h
+    digest2 = good2.h
+    num = digest1 * (good2.s - bad2.s) - digest2 * (good1.s - bad1.s)
+    denom = good1.r * digest2 - good2.r * digest1
     n = NIST256p.order
     return (num * pow(denom, -1, n)) % n
 
 
-def F(r_good, s_good, r_bad, s_bad, digest) -> int:
+def F(good: Signature, bad: Signature) -> int:
     """Uncontrolled fault in r (faulty r returned)"""
     """
         We have two equations:
@@ -109,16 +140,17 @@ def F(r_good, s_good, r_bad, s_bad, digest) -> int:
 
         => x = digest * (s_bad - s_good) / (s_good * r_bad - r_good * s_bad)
     """
-    denom = s_good * r_bad - r_good * s_bad
+    assert good.h == bad.h
+
+    digest = good.h
+    denom = good.s * bad.r - good.r * bad.s
     n = NIST256p.order
     if denom % n == 0:
         return 0
-    return (digest * (s_bad - s_good) * pow(denom, -1, n)) % n
+    return (digest * (bad.s - good.s) * pow(denom, -1, n)) % n
 
 
-def FC1(
-    r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
-) -> int:
+def FC1(good1: Signature, bad1: Signature, good2: Signature, bad2: Signature) -> int:
     """Value fault in r (correct r returned) or rd"""
     """
         We have the four equations:
@@ -139,17 +171,19 @@ def FC1(
                                        (s_good2 * s_bad1 * r_good1 - s_good1 * s_bad2 * r_good2)
         
     """
-    denom = s_good2 * s_bad1 * r_good1 - s_good1 * s_bad2 * r_good2
-    num = s_good1 * digest2 * (s_bad2 - s_good2) - s_good2 * digest1 * (
-        s_bad1 - s_good1
+    assert good1.h == bad1.h and good2.h == bad2.h
+
+    digest1 = good1.h
+    digest2 = good2.h
+    denom = good2.s * bad1.s * good1.r - good1.s * bad2.s * good2.r
+    num = good1.s * digest2 * (bad2.s - good2.s) - good2.s * digest1 * (
+        bad1.s - good1.s
     )
     n = NIST256p.order
     return (num * pow(denom, -1, n)) % n
 
 
-def FC2(
-    r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
-) -> int:
+def FC2(good1: Signature, bad1: Signature, good2: Signature, bad2: Signature) -> int:
     """Value/differential fault in d"""
     """
         We need two faulty equations, one of which is faulty such that digest_bad = digest_good but there is a collision on the error
@@ -169,16 +203,29 @@ def FC2(
         <=>                                    x = s_good1 * r_bad1 * digest2 * (s_bad2 - s_good2) - s_good2 * r_bad2 * digest1 * (s_bad1 - s_good1) /
                                                   (s_good2 * r_bad2 * s_bad1 * r_good1 - s_good1 * r_bad1 * s_bad2 * r_good2)
     """
+    assert good1.h == bad1.h and good2.h == bad2.h
+
+    digest1 = good1.h
+    digest2 = good2.h
+    num = good1.s * bad1.r * digest2 * (
+        bad2.s - good2.s
+    ) - good2.s * bad2.r * digest1 * (bad1.s - good1.s)
+    denom = good2.s * bad2.r * bad1.s * good1.r - good1.s * bad1.r * bad2.s * good2.r
+    """
     num = s_good1 * r_bad1 * digest2 * (
         s_bad2 - s_good2
     ) - s_good2 * r_bad2 * digest1 * (s_bad1 - s_good1)
     denom = s_good2 * r_bad2 * s_bad1 * r_good1 - s_good1 * r_bad1 * s_bad2 * r_good2
+    """
     n = NIST256p.order
     return (num * pow(denom, -1, n)) % n
 
 
 def FC3(
-    r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
+    good1: Signature,
+    bad1: Signature,
+    good2: Signature,
+    bad2: Signature,
 ) -> int:
     """Value fault in h"""
     """
@@ -202,15 +249,17 @@ def FC3(
         <=>                            x = (s_good1 * s_bad2 * digest2 - s_good2 *s_bad1 *digest1) /
                                            (s_bad1 * r_good1 - s_good1 * r_bad1 - s_bad2 * r_good2 + s_good2 * r_bad2))
     """
-    num = s_good1 * s_bad2 * digest2 - s_good2 * s_bad1 * digest1
-    denom = s_bad1 * r_good1 - s_good1 * r_bad1 - s_bad2 * r_good2 + s_good2 * r_bad2
+    assert good1.h == bad1.h and good2.h == bad2.h
+
+    digest1 = good1.h
+    digest2 = good2.h
+    num = good1.s * bad2.s * digest2 - good2.s * bad1.s * digest1
+    denom = bad1.s * good1.r - good1.s * bad1.r - bad2.s * good2.r + good2.s * bad2.r
     n = NIST256p.order
     return (num * pow(denom, -1, n)) % n
 
 
-def FC4(
-    r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
-) -> int:
+def FC4(good1: Signature, bad1: Signature, good2: Signature, bad2: Signature) -> int:
     """Value fault in rd+h"""
     """
         We need two faulty equations, one of which is faulty such that digest_bad = digest_good but there is a collision on the error
@@ -230,13 +279,17 @@ def FC4(
         <=>                        x = (s_good1 * s_bad2 * digest2 - s_good2 * s_bad1 * digest1)/
                                        (s_good2 * s_bad1 * r_good1 - s_good1 * s_bad2 * r_good2)
     """
-    num = s_good1 * s_bad2 * digest2 - s_good2 * s_bad1 * digest1
-    denom = s_good2 * s_bad1 * r_good1 - s_good1 * s_bad2 * r_good2
+    assert good1.h == bad1.h and good2.h == bad2.h
+
+    digest1 = good1.h
+    digest2 = good2.h
+    num = good1.s * bad2.s * digest2 - good2.s * bad1.s * digest1
+    denom = good2.s * bad1.s * good1.r - good1.s * bad2.s * good2.r
     n = NIST256p.order
     return (num * pow(denom, -1, n)) % n
 
 
-def FC5(r1, s1, r2, s2, digest1, digest2) -> int:
+def FC5(bad1: Signature, bad2: Signature) -> int:
     """Value fault in k or k^-1"""
     """
         We have two equations
@@ -253,8 +306,10 @@ def FC5(r1, s1, r2, s2, digest1, digest2) -> int:
         => s2 * r1 * x + s2 * digest1 = s1 * r2 * x + s1 * digest2 
         <=> x = (digest2 * s1 - digest1 * s2) / (s2 * r1 - r2 * s1)
     """
-    num = digest2 * s1 - digest1 * s2
-    denom = s2 * r1 - r2 * s1
+    assert bad1.h != bad2.h
+
+    num = bad2.h * bad1.s - bad1.h * bad2.s
+    denom = bad2.s * bad1.r - bad2.r * bad1.s
     n = NIST256p.order
     if denom % n == 0:
         return 0
@@ -281,29 +336,24 @@ def recover_key(correct_sigs, faulty_sigs, digests, test_only_F=True) -> List[in
         return []
 
     # first try using F, only needing a couple:
-    for c_r, c_s, f_r, f_s, h in zip(correct_r, correct_s, faulty_r, faulty_s, digests):
-        res.append(F(c_r, c_s, f_r, f_s, h))
+    sig1 = Signature(digests[0], correct_r[0], correct_s[0])
+    sig2 = Signature(digests[0], faulty_r[0], faulty_s[0])
+    res.append(F(sig1, sig2))
 
     if not test_only_F:
-        cr_0 = correct_r[0]
-        cr_1 = correct_r[1]
-        cs_0 = correct_s[0]
-        cs_1 = correct_s[1]
-        fr_0 = faulty_r[0]
-        fr_1 = faulty_r[1]
-        fs_0 = faulty_s[0]
-        fs_1 = faulty_s[1]
-        h_0 = digests[0]
-        h_1 = digests[1]
+        c0 = Signature(digests[0], correct_r[0], correct_s[0])
+        f0 = Signature(digests[0], faulty_r[0], faulty_s[0])
+        c1 = Signature(digests[1], correct_r[1], correct_s[1])
+        f1 = Signature(digests[1], faulty_r[1], faulty_s[1])
 
-        res.append(FC5(fr_0, fs_0, fr_1, fs_1, h_0, h_1))
-        res.append(FC1(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
-        res.append(FC2(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
-        res.append(FC3(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
-        res.append(FC4(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
-        res.append(FDC1(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
-        res.append(FDC2(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
-        res.append(FDC3(cr_0, cs_0, fr_0, fr_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
+        res.append(FC1(c0, f0, c1, f1))
+        res.append(FC2(c0, f0, c1, f1))
+        res.append(FC3(c0, f0, c1, f1))
+        res.append(FC4(c0, f0, c1, f1))
+        res.append(FC5(f0, f1))
+        res.append(FDC1(c0, f0, c1, f1))
+        res.append(FDC2(c0, f0, c1, f1))
+        res.append(FDC3(c0, f0, c1, f1))
     return res
 
 
