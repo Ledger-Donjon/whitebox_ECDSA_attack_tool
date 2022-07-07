@@ -112,6 +112,8 @@ def F(r_good, s_good, r_bad, s_bad, digest) -> int:
     """
     denom = s_good * r_bad - r_good * s_bad
     n = NIST256p.order
+    if denom % n == 0:
+        return 0
     return (digest * (s_bad - s_good) * pow(denom, -1, n)) % n
 
 
@@ -298,13 +300,13 @@ def recover_key(correct_sigs, faulty_sigs, digests, test_only_F=True) -> List[in
         h_1 = digests[1]
 
         res.append(FC5(fr_0, fs_0, fr_1, fs_1, h_0, h_1))
-        res.append(FC1(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
-        res.append(FC2(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
-        res.append(FC3(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
-        res.append(FC4(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
-        res.append(FDC1(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
-        res.append(FDC2(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
-        res.append(FDC3(cr_0, cs_0, fr_0, fr_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
+        res.append(FC1(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
+        res.append(FC2(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
+        res.append(FC3(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
+        res.append(FC4(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
+        res.append(FDC1(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
+        res.append(FDC2(cr_0, cs_0, fr_0, fs_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
+        res.append(FDC3(cr_0, cs_0, fr_0, fr_0, cr_1, cs_1, fr_1, fs_1, h_0, h_1))
     return res
 
 
