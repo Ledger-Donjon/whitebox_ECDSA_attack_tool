@@ -4,23 +4,23 @@ This repo contains an automatic attack tool, allowing for the attack of some whi
 
 The tool compiles the provided challenge and tries to inject faults by randomly perturbing one or several faults of the binary file. The faulty values are then exploited by Differential Fault Analysis methods.
 
-It has been used to automatically break most of the challenges of the [WhiBox contest](https://whibox.io/contests/2021/). Note however that some challenges resist to our automatic approach!
+It has been used to automatically break most of the challenges of the [WhibOx contest](https://whibox.io/contests/2021/). Note however that some challenges resist to our automatic approach!
 
 For more details about the tool design, please read the associated [blogpost](todo:update with correct link when available).
 
 ## How to use?
-First of all, you'll need to download the challenges from the WhiBOx website:
 
+First of all, you'll need to download the challenges from the WhibOx website:
+
+```shell
+python3 download_challenges.py
 ```
-$ python3 download_challenges.py
-```
 
-All available sources will be contained in the created directory ```challenges```.
-
+All available sources will be contained in the created directory `challenges`.
 
 Now, you can target any challenge by giving its id number as argument:
 
-```
+```shell
 $ python3 pwn_fault.py --only_F --target 3
 Target pubkey: 71948E19545103FB435F876DC4A805C380077DA6454A6A3B69DF0F4F96DE768435BF260A31C75C313E13DD8C144F9789F0138DEA7B31BE5B98BA44FD263DB279
 main_a
@@ -42,7 +42,7 @@ Fault: index=0x165b, value=0xc1
 
 The ```-only_F``` option ensures that only the simplest and most efficient attack method is used. It implies a quickest execution time, but some challenges may resist. By disabling it, the tool tries to inject faults into two different binary files.
 
-```
+```shell
 $ python3 pwn_fault.py --target 3
 Target pubkey: 71948E19545103FB435F876DC4A805C380077DA6454A6A3B69DF0F4F96DE768435BF260A31C75C313E13DD8C144F9789F0138DEA7B31BE5B98BA44FD263DB279
 main_a
