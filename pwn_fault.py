@@ -481,7 +481,7 @@ def main():
             faulty_out_b = ""
         else:
             faulty_out_b = inject_and_run(origin_file_name_b, fault)
-            faulty_sigs += [faulty_out_a]
+            faulty_sigs += [faulty_out_b]
 
         if correct_out_a == faulty_out_a and (
             args.fast or correct_out_b == faulty_out_b
