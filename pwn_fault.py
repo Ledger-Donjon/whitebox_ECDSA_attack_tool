@@ -57,6 +57,8 @@ def FDC1(
     num = good1.s * bad2.s * digest2 - good2.s * bad1.s * digest1
     denom = good2.s * bad1.s * good1.r - good1.s * bad2.s * good2.r
     n = NIST256p.order
+    if denom % n == 0:
+        return 0
     return (num * pow(denom, -1, n)) % n
 
 
@@ -95,6 +97,8 @@ def FDC2(
         bad1.r * good1.s - good1.r * bad1.s
     ) - good1.s * bad1.s * (bad2.r * good2.s - good2.r * bad2.s)
     n = NIST256p.order
+    if denom % n == 0:
+        return 0
     return (num * pow(denom, -1, n)) % n
 
 
@@ -180,6 +184,8 @@ def FC1(good1: Signature, bad1: Signature, good2: Signature, bad2: Signature) ->
         bad1.s - good1.s
     )
     n = NIST256p.order
+    if denom % n == 0:
+        return 0
     return (num * pow(denom, -1, n)) % n
 
 
@@ -218,6 +224,8 @@ def FC2(good1: Signature, bad1: Signature, good2: Signature, bad2: Signature) ->
     denom = s_good2 * r_bad2 * s_bad1 * r_good1 - s_good1 * r_bad1 * s_bad2 * r_good2
     """
     n = NIST256p.order
+    if denom % n == 0:
+        return 0
     return (num * pow(denom, -1, n)) % n
 
 
@@ -256,6 +264,8 @@ def FC3(
     num = good1.s * bad2.s * digest2 - good2.s * bad1.s * digest1
     denom = bad1.s * good1.r - good1.s * bad1.r - bad2.s * good2.r + good2.s * bad2.r
     n = NIST256p.order
+    if denom % n == 0:
+        return 0
     return (num * pow(denom, -1, n)) % n
 
 
@@ -286,6 +296,8 @@ def FC4(good1: Signature, bad1: Signature, good2: Signature, bad2: Signature) ->
     num = good1.s * bad2.s * digest2 - good2.s * bad1.s * digest1
     denom = good2.s * bad1.s * good1.r - good1.s * bad2.s * good2.r
     n = NIST256p.order
+    if denom % n == 0:
+        return 0
     return (num * pow(denom, -1, n)) % n
 
 
@@ -496,6 +508,8 @@ def main():
             dd = recover_key(correct_sigs, faulty_sigs, digests, args.fast)
 
             for d in dd:
+                if d == 0:
+                    continue
                 print("Trying", d)
                 pt = d * NIST256p.generator
 
