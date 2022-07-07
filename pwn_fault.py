@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import time
+from typing import List
 
 from ecdsa.curves import NIST256p
 from ecdsa.ellipticcurve import INFINITY
@@ -18,7 +19,7 @@ PATH = "./"
 
 def FDC1(
     r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
-):
+) -> int:
     """Differential fault in r, rd, h, rd+h"""
     """
         We have four equations:
@@ -40,12 +41,12 @@ def FDC1(
     num = s_good1 * s_bad2 * digest2 - s_good2 * s_bad1 * digest1
     denom = s_good2 * s_bad1 * r_good1 - s_good1 * s_bad2 * r_good2
     n = NIST256p.order
-    return [(num * pow(denom, -1, n)) % n]
+    return (num * pow(denom, -1, n)) % n
 
 
 def FDC2(
     r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
-):
+) -> int:
     """Differential fault in k (faulty r returned)"""
     """
         We have four equations:
@@ -71,12 +72,12 @@ def FDC2(
         r_bad1 * s_good1 - r_good1 * s_bad1
     ) - s_good1 * s_bad1 * (r_bad2 * s_good2 - r_good2 * s_bad2)
     n = NIST256p.order
-    return [(num * pow(denom, -1, n)) % n]
+    return (num * pow(denom, -1, n)) % n
 
 
 def FDC3(
     r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
-):
+) -> int:
     """Differential fault in k^-1 (faulty r returned)"""
     """
         We have two equations:
@@ -93,10 +94,10 @@ def FDC3(
     num = digest1 * (s_good2 - s_bad2) - digest2 * (s_good1 - s_bad1)
     denom = r_good1 * digest2 - r_good2 * digest1
     n = NIST256p.order
-    return [(num * pow(denom, -1, n)) % n]
+    return (num * pow(denom, -1, n)) % n
 
 
-def F(r_good, s_good, r_bad, s_bad, digest):
+def F(r_good, s_good, r_bad, s_bad, digest) -> int:
     """Uncontrolled fault in r (faulty r returned)"""
     """
         We have two equations:
@@ -111,12 +112,12 @@ def F(r_good, s_good, r_bad, s_bad, digest):
     """
     denom = s_good * r_bad - r_good * s_bad
     n = NIST256p.order
-    return [(digest * (s_bad - s_good) * pow(denom, -1, n)) % n]
+    return (digest * (s_bad - s_good) * pow(denom, -1, n)) % n
 
 
 def FC1(
     r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
-):
+) -> int:
     """Value fault in r (correct r returned) or rd"""
     """
         We have the four equations:
@@ -142,12 +143,12 @@ def FC1(
         s_bad1 - s_good1
     )
     n = NIST256p.order
-    return [(num * pow(denom, -1, n)) % n]
+    return (num * pow(denom, -1, n)) % n
 
 
 def FC2(
     r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
-):
+) -> int:
     """Value/differential fault in d"""
     """
         We need two faulty equations, one of which is faulty such that digest_bad = digest_good but there is a collision on the error
@@ -172,12 +173,12 @@ def FC2(
     ) - s_good2 * r_bad2 * digest1 * (s_bad1 - s_good1)
     denom = s_good2 * r_bad2 * s_bad1 * r_good1 - s_good1 * r_bad1 * s_bad2 * r_good2
     n = NIST256p.order
-    return [(num * pow(denom, -1, n)) % n]
+    return (num * pow(denom, -1, n)) % n
 
 
 def FC3(
     r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
-):
+) -> int:
     """Value fault in h"""
     """
         We need two faulty equations, one of which is faulty such that digest_bad = digest_good but there is a collision on the error
@@ -203,12 +204,12 @@ def FC3(
     num = s_good1 * s_bad2 * digest2 - s_good2 * s_bad1 * digest1
     denom = s_bad1 * r_good1 - s_good1 * r_bad1 - s_bad2 * r_good2 + s_good2 * r_bad2
     n = NIST256p.order
-    return [(num * pow(denom, -1, n)) % n]
+    return (num * pow(denom, -1, n)) % n
 
 
 def FC4(
     r_good1, s_good1, r_bad1, s_bad1, r_good2, s_good2, r_bad2, s_bad2, digest1, digest2
-):
+) -> int:
     """Value fault in rd+h"""
     """
         We need two faulty equations, one of which is faulty such that digest_bad = digest_good but there is a collision on the error
@@ -231,10 +232,10 @@ def FC4(
     num = s_good1 * s_bad2 * digest2 - s_good2 * s_bad1 * digest1
     denom = s_good2 * s_bad1 * r_good1 - s_good1 * s_bad2 * r_good2
     n = NIST256p.order
-    return [(num * pow(denom, -1, n)) % n]
+    return (num * pow(denom, -1, n)) % n
 
 
-def FC5(r1, s1, r2, s2, digest1, digest2):
+def FC5(r1, s1, r2, s2, digest1, digest2) -> int:
     """Value fault in k or k^-1"""
     """
         We have two equations
@@ -254,17 +255,20 @@ def FC5(r1, s1, r2, s2, digest1, digest2):
     num = digest2 * s1 - digest1 * s2
     denom = s2 * r1 - r2 * s1
     n = NIST256p.order
-    return [(num * pow(denom, -1, n)) % n]
+    if denom % n == 0:
+        return 0
+    return (num * pow(denom, -1, n)) % n
 
 
-def recover_key(correct_sigs, faulty_sigs, digests, test_only_F=True):
+def recover_key(correct_sigs, faulty_sigs, digests, test_only_F=True) -> List[int]:
     # since F is the attack with the best success rate, we allow for the possibility to only try this approach
-    res = [-1]
+    res = []
+
+    correct_r = []
+    faulty_r = []
+    correct_s = []
+    faulty_s = []
     try:
-        correct_r = []
-        faulty_r = []
-        correct_s = []
-        faulty_s = []
         for correct_out, faulty_out in zip(correct_sigs, faulty_sigs):
             # first, we retrieve values r,s
             correct_r += [int(correct_out[0 : 32 * 2], 16)]
@@ -273,15 +277,13 @@ def recover_key(correct_sigs, faulty_sigs, digests, test_only_F=True):
             faulty_r += [int(faulty_out[0 : 32 * 2], 16)]
             faulty_s += [int(faulty_out[32 * 2 : 64 * 2], 16)]
     except:
-        return [-1]
-    try:
-        # first try using F, only needing a couple:
-        for c_r, c_s, f_r, f_s, h in zip(
-            correct_r, correct_s, faulty_r, faulty_s, digests
-        ):
-            res += F(c_r, c_s, f_r, f_s, h)
-    except:
-        pass
+        return []
+
+    # first try using F, only needing a couple:
+    for c_r, c_s, f_r, f_s, h in zip(
+        correct_r, correct_s, faulty_r, faulty_s, digests
+    ):
+        res.append(F(c_r, c_s, f_r, f_s, h))
 
     if not test_only_F:
         cr_0 = correct_r[0]
@@ -295,38 +297,14 @@ def recover_key(correct_sigs, faulty_sigs, digests, test_only_F=True):
         h_0 = digests[0]
         h_1 = digests[1]
 
-        try:
-            res += FC5(fr_0, fs_0, fr_1, fs_1, h_0, h_1)
-        except:
-            pass
-        try:
-            res += FC1(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1)
-        except:
-            pass
-        try:
-            res += FC2(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1)
-        except:
-            pass
-        try:
-            res += FC3(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1)
-        except:
-            pass
-        try:
-            res += FC4(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1)
-        except:
-            pass
-        try:
-            res += FDC1(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1)
-        except:
-            pass
-        try:
-            res += FDC2(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1)
-        except:
-            pass
-        try:
-            res += FDC3(cr_0, cs_0, fr_0, fr_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1)
-        except:
-            pass
+        res.append(FC5(fr_0, fs_0, fr_1, fs_1, h_0, h_1))
+        res.append(FC1(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
+        res.append(FC2(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
+        res.append(FC3(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
+        res.append(FC4(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
+        res.append(FDC1(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
+        res.append(FDC2(cr_0, cs_0, fr_0, fs_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
+        res.append(FDC3(cr_0, cs_0, fr_0, fr_0, cr_1, cs_0, fr_1, fs_1, h_0, h_1))
     return res
 
 
@@ -376,6 +354,7 @@ def main():
     )
 
     origin_file_name_a = "main_a"
+    origin_file_name_b = "main_b"
     size_file = os.path.getsize(PATH + origin_file_name_a)
 
     print(origin_file_name_a)
@@ -384,7 +363,9 @@ def main():
     correct_sig1 = correct_out_a
     print("Correct sig1:", correct_sig1)
 
-    if not test_only_F:
+    if test_only_F:
+        correct_out_b = ""
+    else:
         digests += [0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB]
         subprocess.run(
             [
@@ -401,7 +382,6 @@ def main():
             check=True,
         )
 
-        origin_file_name_b = "main_b"
         size_file = os.path.getsize(PATH + origin_file_name_b)
 
         print(origin_file_name_b)
@@ -446,7 +426,9 @@ def main():
         faulty_out_a = inject_fault(origin_file_name_a, faults)
         faulty_sigs = [faulty_out_a]
 
-        if not test_only_F:
+        if test_only_F:
+            faulty_out_b = ""
+        else:
             faulty_out_b = inject_fault(origin_file_name_b, faults)
             faulty_sigs += [faulty_out_a]
 
