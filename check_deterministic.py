@@ -8,7 +8,7 @@ for dirname in sorted(os.listdir("challenges")):
     proc = subprocess.run(
         [
             "gcc-10",
-            "drivers/main.c",
+            "drivers/main_a.c",
             os.path.join("challenges", dirname, "source.c"),
             "-o",
             "challenge",
