@@ -14,6 +14,7 @@ if os.path.exists(CHALLENGES_PATH):
     shutil.rmtree(CHALLENGES_PATH)
 os.mkdir(CHALLENGES_PATH)
 
+
 def main():
     session = requests.Session()
     for i in range(3, NUM_CHALLENGES + 1):
@@ -33,6 +34,7 @@ def main():
 
             with open(os.path.join(challenge_base_dir, filename), "wb") as f:
                 f.write(req.content)
+
 
 if __name__ == "__main__":
     main()
