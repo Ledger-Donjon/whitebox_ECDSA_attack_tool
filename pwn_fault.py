@@ -357,23 +357,44 @@ def recover_key(correct_sigs, faulty_sigs, digests, test_only_F=True) -> List[in
     return res
 
 
-def inject_fault(origin_file_name: str, faults):
+def inject_and_run(origin_file_name: str, fault=None):
     copy_file_name = "faulted_a.out"
     shutil.copy(origin_file_name, copy_file_name)
 
-    f = open(copy_file_name, "r+b")
-    for fault in faults:
-        byte_index, byte_value = fault
-        f.seek(byte_index)
-        f.write(bytes([byte_value]))
-    f.close()
+    if fault:
+        with open(copy_file_name, "r+b") as f:
+            byte_index, byte_value = fault
+            f.seek(byte_index)
+            f.write(bytes([byte_value]))
     try:
         faulty_out = subprocess.check_output(
             [PATH + copy_file_name], timeout=3
         ).decode()
-    except:
-        return -1
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        OSError,
+        UnicodeDecodeError,
+    ):
+        return None
     return faulty_out
+
+
+def compile_challenge(name: str, challenge_id: int):
+    subprocess.run(
+        [
+            "gcc-10",
+            os.path.join("drivers", name + ".c"),
+            os.path.join("drivers", "mocks.c"),
+            os.path.join("challenges", str(challenge_id), "source.c"),
+            "-o",
+            name,
+            "-lgmp",
+        ],
+        stdout=None,
+        stderr=subprocess.DEVNULL,
+        check=True,
+    )
 
 
 def main():
@@ -395,27 +416,14 @@ def main():
     print("Target pubkey:", pubkey)
 
     digests = [0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]
-    subprocess.run(
-        [
-            "gcc-10",
-            "drivers/main_a.c",
-            "drivers/mocks.c",
-            os.path.join("challenges", str(args.challenge_id), "source.c"),
-            "-o",
-            "main_a",
-            "-lgmp",
-        ],
-        stdout=None,
-        stderr=subprocess.DEVNULL,
-        check=True,
-    )
 
+    compile_challenge("main_a", args.challenge_id)
     origin_file_name_a = "main_a"
     origin_file_name_b = "main_b"
-    size_file = os.path.getsize(PATH + origin_file_name_a)
+    size_file = os.path.getsize(origin_file_name_a)
 
     print(origin_file_name_a)
-    correct_out_a = subprocess.check_output([PATH + origin_file_name_a])
+    correct_out_a = subprocess.check_output([os.path.join(".", origin_file_name_a)])
     correct_out_a = correct_out_a.decode()
     correct_sig1 = correct_out_a
     print("Correct sig1:", correct_sig1)
@@ -424,20 +432,7 @@ def main():
         correct_out_b = ""
     else:
         digests += [0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB]
-        subprocess.run(
-            [
-                "gcc-10",
-                "drivers/main_b.c",
-                "drivers/mocks.c",
-                os.path.join("challenges", str(args.challenge_id), "source.c"),
-                "-o",
-                "main_b",
-                "-lgmp",
-            ],
-            stdout=None,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
+        compile_challenge("main_b", args.challenge_id)
 
         size_file = os.path.getsize(PATH + origin_file_name_b)
 
@@ -460,11 +455,11 @@ def main():
         return
 
     # restart with 0 fault, same file name
-    correct_out_a = inject_fault(origin_file_name_a, [])
+    correct_out_a = inject_and_run(origin_file_name_a)
     correct_sigs = [correct_out_a]
 
     if not args.fast:
-        correct_out_b = inject_fault(origin_file_name_b, [])
+        correct_out_b = inject_and_run(origin_file_name_b)
         correct_sigs += [correct_out_b]
 
     nb_no_effect = 0
@@ -477,23 +472,22 @@ def main():
         byte_index = random.randint(0, size_file)
         byte_value = random.randint(0, 255)
 
-        # inject faults: we can modify the next line if we want to inject several faults in the binary
-        faults = [(byte_index, byte_value)]
+        fault = (byte_index, byte_value)
 
-        faulty_out_a = inject_fault(origin_file_name_a, faults)
+        faulty_out_a = inject_and_run(origin_file_name_a, fault)
         faulty_sigs = [faulty_out_a]
 
         if args.fast:
             faulty_out_b = ""
         else:
-            faulty_out_b = inject_fault(origin_file_name_b, faults)
+            faulty_out_b = inject_and_run(origin_file_name_b, fault)
             faulty_sigs += [faulty_out_a]
 
         if correct_out_a == faulty_out_a and (
             args.fast or correct_out_b == faulty_out_b
         ):
             nb_no_effect += 1
-        elif faulty_out_a == -1 or (not args.fast and faulty_out_b == -1):
+        elif faulty_out_a is None or (not args.fast and faulty_out_b is None):
             nb_crashes += 1
         else:
             print("FOUND FAULT:", faulty_sigs)
