@@ -6,7 +6,7 @@ The tool compiles the provided challenge and tries to inject faults by randomly 
 
 It has been used to automatically break most of the challenges of the [WhibOx contest](https://whibox.io/contests/2021/). Note however that some challenges resist to our automatic approach!
 
-For more details about the tool design, please read the associated [blogpost](todo:update with correct link when available).
+For more details about the tool design, please read the associated [blogpost](https://blog.ledger.com/whitebox_ecdsa/).
 
 ## How to use?
 
