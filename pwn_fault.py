@@ -8,15 +8,20 @@ import argparse
 import os
 import random
 import shutil
+import string
 import subprocess
-import time
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from ecdsa.curves import NIST256p
 from ecdsa.ellipticcurve import Point
 
-PATH = "./"
+ORIGINAL_FILENAME_A = "main_a"
+ORIGINAL_FILENAME_B = "main_b"
+ECDSA_SIG_SIZE = 256 // 8 * 2
+
+DIGEST_A = 0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+DIGEST_B = 0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
 
 
 @dataclass
@@ -328,35 +333,18 @@ def FC5(bad1: Signature, bad2: Signature) -> int:
     return (num * pow(denom, -1, n)) % n
 
 
-def recover_key(correct_sigs, faulty_sigs, digests, f_only=True) -> List[int]:
-    # since F is the attack with the best success rate, we allow for the possibility to only try this approach
+def recover_key(
+    correct_sigs: List[Signature], faulty_sigs: List[Signature]
+) -> List[int]:
     res = []
 
-    correct_r = []
-    faulty_r = []
-    correct_s = []
-    faulty_s = []
-    try:
-        for correct_out, faulty_out in zip(correct_sigs, faulty_sigs):
-            # first, we retrieve values r,s
-            correct_r += [int(correct_out[0 : 32 * 2], 16)]
-            correct_s += [int(correct_out[32 * 2 : 64 * 2], 16)]
-
-            faulty_r += [int(faulty_out[0 : 32 * 2], 16)]
-            faulty_s += [int(faulty_out[32 * 2 : 64 * 2], 16)]
-    except:
-        return []
-
     # first try using F, only needing a couple:
-    sig1 = Signature(digests[0], correct_r[0], correct_s[0])
-    sig2 = Signature(digests[0], faulty_r[0], faulty_s[0])
-    res.append(F(sig1, sig2))
+    for i in range(len(correct_sigs)):
+        res.append(F(correct_sigs[i], faulty_sigs[i]))
 
-    if not f_only:
-        c0 = Signature(digests[0], correct_r[0], correct_s[0])
-        f0 = Signature(digests[0], faulty_r[0], faulty_s[0])
-        c1 = Signature(digests[1], correct_r[1], correct_s[1])
-        f1 = Signature(digests[1], faulty_r[1], faulty_s[1])
+    if len(correct_sigs) == 2 and len(faulty_sigs) == 2:
+        c0, c1 = correct_sigs
+        f0, f1 = faulty_sigs
 
         res.append(FC1(c0, f0, c1, f1))
         res.append(FC2(c0, f0, c1, f1))
@@ -370,7 +358,7 @@ def recover_key(correct_sigs, faulty_sigs, digests, f_only=True) -> List[int]:
 
 
 def inject_and_run(origin_file_name: str, fault=None):
-    copy_file_name = "faulted_a.out"
+    copy_file_name = "faulted.out"
     shutil.copy(origin_file_name, copy_file_name)
 
     if fault:
@@ -380,7 +368,7 @@ def inject_and_run(origin_file_name: str, fault=None):
             f.write(bytes([byte_value]))
     try:
         faulty_out = subprocess.check_output(
-            [PATH + copy_file_name], timeout=3
+            os.path.join(".", copy_file_name), timeout=3
         ).decode()
     except (
         subprocess.CalledProcessError,
@@ -390,6 +378,20 @@ def inject_and_run(origin_file_name: str, fault=None):
     ):
         return None
     return faulty_out
+
+
+def get_signature(
+    original_file_name: str, digest: int, fault=None
+) -> Optional[Signature]:
+    output = inject_and_run(original_file_name, fault)
+    if not output:
+        return None
+
+    if len(output) == 129 and all(c in string.hexdigits for c in output[:128]):
+        r = int(output[0 : ECDSA_SIG_SIZE], 16)
+        s = int(output[ECDSA_SIG_SIZE : 2 * ECDSA_SIG_SIZE], 16)
+        return Signature(digest, r, s)
+    return None
 
 
 def compile_challenge(name: str, challenge_id: int):
@@ -412,8 +414,72 @@ def compile_challenge(name: str, challenge_id: int):
 def load_public_key(challenge_id: int) -> Point:
     with open(os.path.join("challenges", str(challenge_id), "pubkey")) as f:
         pubkey_data = f.read()
-    public_key = Point(NIST256p.curve, int(pubkey_data[:64], 16), int(pubkey_data[64:], 16))
+    public_key = Point(
+        NIST256p.curve, int(pubkey_data[:64], 16), int(pubkey_data[64:], 16)
+    )
     return public_key
+
+
+def ecdsa_fault_attack(challenge_id: int, fast_mode=False):
+    public_key = load_public_key(challenge_id)
+    print("Target pubkey:", public_key)
+
+    # get a couple valid signatures
+    compile_challenge(ORIGINAL_FILENAME_A, challenge_id)
+    correct_sigs = [get_signature(ORIGINAL_FILENAME_A, DIGEST_A)]
+    file_size = os.path.getsize(ORIGINAL_FILENAME_A)
+    if not fast_mode:
+        compile_challenge(ORIGINAL_FILENAME_B, challenge_id)
+        correct_sigs.append(get_signature(ORIGINAL_FILENAME_B, DIGEST_B))
+        file_size = os.path.getsize(ORIGINAL_FILENAME_B)
+
+    nb_no_effect = 0
+    nb_crashes = 0
+    max_tries_wo_effect = 1_000_000
+
+    # main injection loop
+    while nb_no_effect < max_tries_wo_effect:
+        byte_index = random.randint(0, file_size)
+        byte_value = random.randint(0, 255)
+        fault = (byte_index, byte_value)
+
+        faulty_sig_a = get_signature(ORIGINAL_FILENAME_A, DIGEST_A, fault)
+        if faulty_sig_a:
+            faulty_sigs = [faulty_sig_a]
+        else:
+            faulty_sigs = []
+
+        faulty_sig_b = None
+        if not fast_mode:
+            faulty_sig_b = get_signature(ORIGINAL_FILENAME_B, DIGEST_B, fault)
+            if faulty_sig_b:
+                faulty_sigs.append(faulty_sig_b)
+
+        if faulty_sig_a == correct_sigs[0] and (
+            fast_mode or faulty_sig_b == correct_sigs[1]
+        ):
+            nb_no_effect += 1
+        elif faulty_sig_a is None or (not fast_mode and faulty_sig_b is None):
+            nb_crashes += 1
+        else:
+            print("Found fault:", faulty_sigs)
+            print("Trying to recover the key...")
+            dd = recover_key(correct_sigs, faulty_sigs)
+
+            for d in dd:
+                print("Trying", d)
+                if d * NIST256p.generator == public_key:
+                    print("Found correct public point:", public_key)
+                    print("Found private key:", d)
+                    print("In hex:", hex(d))
+                    print(f"Fault: index={hex(byte_index)}, value={hex(byte_value)}")
+                    print("# crashes = ", nb_crashes)
+                    print("# faults without effect = ", nb_no_effect)
+                    return
+
+    print("No exploitable fault found")
+    print("# crashes = ", nb_crashes)
+    print("# faults without effect = ", nb_no_effect)
 
 
 def main():
@@ -429,106 +495,7 @@ def main():
         action="store_true",
     )
     args = parser.parse_args()
-
-    public_key = load_public_key(args.challenge_id)
-    print("Target pubkey:", public_key)
-
-    digests = [0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]
-
-    compile_challenge("main_a", args.challenge_id)
-    origin_file_name_a = "main_a"
-    origin_file_name_b = "main_b"
-    file_size = os.path.getsize(origin_file_name_a)
-
-    print(origin_file_name_a)
-    correct_out_a = subprocess.check_output([os.path.join(".", origin_file_name_a)])
-    correct_out_a = correct_out_a.decode()
-    correct_sig1 = correct_out_a
-    print("Correct sig1:", correct_sig1)
-
-    if args.fast:
-        correct_out_b = ""
-    else:
-        digests += [0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB]
-        compile_challenge("main_b", args.challenge_id)
-
-        file_size = os.path.getsize(PATH + origin_file_name_b)
-
-        print(origin_file_name_b)
-        correct_out_b = subprocess.check_output([PATH + origin_file_name_b])
-        correct_out_b = correct_out_b.decode()
-        correct_sig2 = correct_out_b
-        print("Correct sig2:", correct_sig2)
-
-    time.sleep(1)
-
-    # check for deterministic ECDSA
-    print(origin_file_name_a)
-    new_out = subprocess.check_output([PATH + origin_file_name_a])
-    new_out = new_out.decode()
-    print("new_output:", new_out)
-
-    if correct_out_a != new_out:
-        print("ERROR: Non-deterministic ECDSA!")
-        return
-
-    # restart with 0 fault, same file name
-    correct_out_a = inject_and_run(origin_file_name_a)
-    correct_sigs = [correct_out_a]
-
-    if not args.fast:
-        correct_out_b = inject_and_run(origin_file_name_b)
-        correct_sigs += [correct_out_b]
-
-    nb_no_effect = 0
-    nb_crashes = 0
-
-    max_tries_wo_effect = 1_000_000
-
-    # main injection loop
-    while nb_no_effect < max_tries_wo_effect:
-        byte_index = random.randint(0, file_size)
-        byte_value = random.randint(0, 255)
-
-        fault = (byte_index, byte_value)
-
-        faulty_out_a = inject_and_run(origin_file_name_a, fault)
-        faulty_sigs = [faulty_out_a]
-
-        if args.fast:
-            faulty_out_b = ""
-        else:
-            faulty_out_b = inject_and_run(origin_file_name_b, fault)
-            faulty_sigs += [faulty_out_b]
-
-        if correct_out_a == faulty_out_a and (
-            args.fast or correct_out_b == faulty_out_b
-        ):
-            nb_no_effect += 1
-        elif faulty_out_a is None or (not args.fast and faulty_out_b is None):
-            nb_crashes += 1
-        else:
-            print("FOUND FAULT:", faulty_sigs)
-            print("trying to recover the key...")
-
-            dd = recover_key(correct_sigs, faulty_sigs, digests, args.fast)
-
-            for d in dd:
-                if d == 0:
-                    continue
-                print("Trying", d)
-                if d * NIST256p.generator == public_key:
-                    print("Found correct public point:", hex(public_key.x()), hex(public_key.y()))
-                    print("Found private key:", d)
-                    print("In hex:", hex(d))
-                    print(f"Fault: index={hex(byte_index)}, value={hex(byte_value)}")
-                    return
-                else:
-                    print("Nope...")
-
-    print("No exploitable fault found")
-    print("Nb of crashes = ", nb_crashes)
-    print("Nb of no effect faults = ", nb_no_effect)
+    ecdsa_fault_attack(args.challenge_id, args.fast)
 
 
 if __name__ == "__main__":
