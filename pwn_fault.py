@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import List
 
 from ecdsa.curves import NIST256p
-from ecdsa.ellipticcurve import INFINITY
+from ecdsa.ellipticcurve import Point
 
 PATH = "./"
 
@@ -328,7 +328,7 @@ def FC5(bad1: Signature, bad2: Signature) -> int:
     return (num * pow(denom, -1, n)) % n
 
 
-def recover_key(correct_sigs, faulty_sigs, digests, test_only_F=True) -> List[int]:
+def recover_key(correct_sigs, faulty_sigs, digests, f_only=True) -> List[int]:
     # since F is the attack with the best success rate, we allow for the possibility to only try this approach
     res = []
 
@@ -352,7 +352,7 @@ def recover_key(correct_sigs, faulty_sigs, digests, test_only_F=True) -> List[in
     sig2 = Signature(digests[0], faulty_r[0], faulty_s[0])
     res.append(F(sig1, sig2))
 
-    if not test_only_F:
+    if not f_only:
         c0 = Signature(digests[0], correct_r[0], correct_s[0])
         f0 = Signature(digests[0], faulty_r[0], faulty_s[0])
         c1 = Signature(digests[1], correct_r[1], correct_s[1])
@@ -409,6 +409,13 @@ def compile_challenge(name: str, challenge_id: int):
     )
 
 
+def load_public_key(challenge_id: int) -> Point:
+    with open(os.path.join("challenges", str(challenge_id), "pubkey")) as f:
+        pubkey_data = f.read()
+    public_key = Point(NIST256p.curve, int(pubkey_data[:64], 16), int(pubkey_data[64:], 16))
+    return public_key
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("challenge_id", help="Challenge identifier to attack", type=int)
@@ -423,16 +430,15 @@ def main():
     )
     args = parser.parse_args()
 
-    pubkey_file = open(os.path.join("challenges", str(args.challenge_id), "pubkey"))
-    pubkey = pubkey_file.readlines()[0]
-    print("Target pubkey:", pubkey)
+    public_key = load_public_key(args.challenge_id)
+    print("Target pubkey:", public_key)
 
     digests = [0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]
 
     compile_challenge("main_a", args.challenge_id)
     origin_file_name_a = "main_a"
     origin_file_name_b = "main_b"
-    size_file = os.path.getsize(origin_file_name_a)
+    file_size = os.path.getsize(origin_file_name_a)
 
     print(origin_file_name_a)
     correct_out_a = subprocess.check_output([os.path.join(".", origin_file_name_a)])
@@ -446,7 +452,7 @@ def main():
         digests += [0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB]
         compile_challenge("main_b", args.challenge_id)
 
-        size_file = os.path.getsize(PATH + origin_file_name_b)
+        file_size = os.path.getsize(PATH + origin_file_name_b)
 
         print(origin_file_name_b)
         correct_out_b = subprocess.check_output([PATH + origin_file_name_b])
@@ -481,7 +487,7 @@ def main():
 
     # main injection loop
     while nb_no_effect < max_tries_wo_effect:
-        byte_index = random.randint(0, size_file)
+        byte_index = random.randint(0, file_size)
         byte_value = random.randint(0, 255)
 
         fault = (byte_index, byte_value)
@@ -511,13 +517,8 @@ def main():
                 if d == 0:
                     continue
                 print("Trying", d)
-                pt = d * NIST256p.generator
-
-                if pt == INFINITY:
-                    continue
-
-                if int(pubkey[0:64], 16) == pt.x() and int(pubkey[64:], 16) == pt.y():
-                    print("Found correct public point:", hex(pt.x()), hex(pt.y()))
+                if d * NIST256p.generator == public_key:
+                    print("Found correct public point:", hex(public_key.x()), hex(public_key.y()))
                     print("Found private key:", d)
                     print("In hex:", hex(d))
                     print(f"Fault: index={hex(byte_index)}, value={hex(byte_value)}")
