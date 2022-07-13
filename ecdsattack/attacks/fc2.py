@@ -18,12 +18,14 @@ s_good2*r_bad2(4)-s_good1*r_bad1(5) => 0 = s_good2 * r_bad2 * s_bad1 * r_good1 *
                                           (s_good2 * r_bad2 * s_bad1 * r_good1 - s_good1 * r_bad1 * s_bad2 * r_good2)
 """
 
-from ecdsa.curves import NIST256p
+from ecdsa.curves import Curve
 
 from ..common import Signature
 
 
-def FC2(good1: Signature, bad1: Signature, good2: Signature, bad2: Signature) -> int:
+def FC2(
+    curve: Curve, good1: Signature, bad1: Signature, good2: Signature, bad2: Signature
+) -> int:
     assert good1.h == bad1.h and good2.h == bad2.h
 
     digest1 = good1.h
@@ -32,7 +34,7 @@ def FC2(good1: Signature, bad1: Signature, good2: Signature, bad2: Signature) ->
         bad2.s - good2.s
     ) - good2.s * bad2.r * digest1 * (bad1.s - good1.s)
     denom = good2.s * bad2.r * bad1.s * good1.r - good1.s * bad1.r * bad2.s * good2.r
-    n = NIST256p.order
+    n = curve.order
     if denom % n == 0:
         return 0
     return (num * pow(denom, -1, n)) % n

@@ -18,12 +18,13 @@ s_good2*(5)-s_good1*(6)=> 0 = s_good2 * s_bad1 * r_good1 * x + s_good2 * s_bad1 
          / (s_good2 * s_bad1 * r_good1 - s_good1 * s_bad2 * r_good2 + s_good1 * s_good2 * (r_bad2 - r_bad1))
 """
 
-from ecdsa.curves import NIST256p
+from ecdsa.curves import Curve
 
 from ..common import Signature
 
 
 def FDC1(
+    curve: Curve,
     good1: Signature,
     bad1: Signature,
     good2: Signature,
@@ -43,7 +44,7 @@ def FDC1(
         - good1.s * bad2.s * good2.r
         + good1.s * good2.s * (bad2.r - bad1.r)
     )
-    n = NIST256p.order
+    n = curve.order
     if denom % n == 0:
         return 0
     return (num * pow(denom, -1, n)) % n

@@ -132,7 +132,7 @@ def ecdsa_fault_attack(challenge_id: int, fast_mode=False):
             nb_crashes += 1
         else:
             print("Found fault:", faulty_sigs)
-            d = recover_key(NIST256p.generator, public_key, correct_sigs, faulty_sigs)
+            d = recover_key(NIST256p, NIST256p.generator, public_key, correct_sigs, faulty_sigs)
             if d:
                 print("Found correct public point:", public_key)
                 print("Found private key:", d)

@@ -1,5 +1,6 @@
 from typing import List, Optional
 
+from ecdsa.curves import Curve
 from ecdsa.ellipticcurve import Point
 
 from .attacks.f import F
@@ -15,6 +16,7 @@ from .common import Signature
 
 
 def recover_key(
+    curve: Curve,
     generator: Point,
     public_key: Point,
     correct_sigs: List[Signature], faulty_sigs: List[Signature]
@@ -23,20 +25,20 @@ def recover_key(
 
     # first try using F, only needing a couple:
     for i in range(len(correct_sigs)):
-        res.append(F(correct_sigs[i], faulty_sigs[i]))
+        res.append(F(curve, correct_sigs[i], faulty_sigs[i]))
 
     if len(correct_sigs) == 2 and len(faulty_sigs) == 2:
         c0, c1 = correct_sigs
         f0, f1 = faulty_sigs
 
-        res.append(FC1(c0, f0, c1, f1))
-        res.append(FC2(c0, f0, c1, f1))
-        res.append(FC3(c0, f0, c1, f1))
-        res.append(FC4(c0, f0, c1, f1))
-        res.append(FC5(f0, f1))
-        res.append(FDC1(c0, f0, c1, f1))
-        res.append(FDC2(c0, f0, c1, f1))
-        res.append(FDC3(c0, f0, c1, f1))
+        res.append(FC1(curve, c0, f0, c1, f1))
+        res.append(FC2(curve, c0, f0, c1, f1))
+        res.append(FC3(curve, c0, f0, c1, f1))
+        res.append(FC4(curve, c0, f0, c1, f1))
+        res.append(FC5(curve, f0, f1))
+        res.append(FDC1(curve, c0, f0, c1, f1))
+        res.append(FDC2(curve, c0, f0, c1, f1))
+        res.append(FDC3(curve, c0, f0, c1, f1))
 
     for d in res:
         if d * generator == public_key:

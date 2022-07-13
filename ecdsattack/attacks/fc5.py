@@ -15,17 +15,17 @@ s2 * (r1 * x + digest1) / s1 = r2 * x + digest2
 <=> x = (digest2 * s1 - digest1 * s2) / (s2 * r1 - r2 * s1)
 """
 
-from ecdsa.curves import NIST256p
+from ecdsa.curves import Curve
 
 from ..common import Signature
 
 
-def FC5(bad1: Signature, bad2: Signature) -> int:
+def FC5(curve: Curve, bad1: Signature, bad2: Signature) -> int:
     assert bad1.h != bad2.h
 
     num = bad2.h * bad1.s - bad1.h * bad2.s
     denom = bad2.s * bad1.r - bad2.r * bad1.s
-    n = NIST256p.order
+    n = curve.order
     if denom % n == 0:
         return 0
     return (num * pow(denom, -1, n)) % n

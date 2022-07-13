@@ -23,12 +23,13 @@ s_bad2*(3)-s_good2*(4) => (similarly) s_good2 * e = x * (s_bad2 * r_good2 - s_go
                                    (s_good1 * s_good2 * (r_bad2 - r_bad1) + s_good2 * sbad1 * r_good1 - s_good1 * s_bad2 * r_good2)
 """
 
-from ecdsa.curves import NIST256p
+from ecdsa.curves import Curve
 
 from ..common import Signature
 
 
 def FC3(
+    curve: Curve,
     good1: Signature,
     bad1: Signature,
     good2: Signature,
@@ -44,7 +45,7 @@ def FC3(
         + good2.s * bad1.s * good1.r
         - good1.s * bad2.s * good2.r
     )
-    n = NIST256p.order
+    n = curve.order
     if denom % n == 0:
         return 0
     return (num * pow(denom, -1, n)) % n
