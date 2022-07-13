@@ -10,18 +10,18 @@ For more details about the tool design, please read the associated [blogpost](ht
 
 ## How to use?
 
-First of all, you'll need to download the challenges from the WhibOx website:
+First, you need to download the challenges from the WhibOx website:
 
 ```shell
 python3 download_challenges.py
 ```
 
-All available sources will be contained in the created directory `challenges`.
+All available sources will be stored in the `challenges` directory.
 
-Now, you can target any challenge by giving its id number as argument:
+Now, you can target any challenge by giving its id number as an argument:
 
 ```shell
-$ python3 pwn_fault.py --only_F --target 3
+$ python3 pwn_fault.py --fast 3
 Target pubkey: 71948E19545103FB435F876DC4A805C380077DA6454A6A3B69DF0F4F96DE768435BF260A31C75C313E13DD8C144F9789F0138DEA7B31BE5B98BA44FD263DB279
 main_a
 Correct sig1: 9EFC917AAE547F81F3C2043EBD4EA6C7334E7190CD5B460CC4F17C39EC20B44FFC1C1F4398EB08FCD57E42CA6FB1848827D9AC487501FC299BE3E5A3378D954A
@@ -40,10 +40,10 @@ In hex: 0x45189c81eadee03202bfa06eaa15831789f0c76575508a563e1a739ca37b87be
 Fault: index=0x165b, value=0xc1
 ```
 
-The ```-only_F``` option ensures that only the simplest and most efficient attack method is used. It implies a quickest execution time, but some challenges may resist. By disabling it, the tool tries to inject faults into two different binary files.
+The ```--fast``` option ensures that only the simplest and most efficient attack method is used. It implies a quickest execution time, but some challenges may resist. By disabling it, the tool tries to inject faults into two different binary files.
 
 ```shell
-$ python3 pwn_fault.py --target 3
+$ python3 pwn_fault.py 3
 Target pubkey: 71948E19545103FB435F876DC4A805C380077DA6454A6A3B69DF0F4F96DE768435BF260A31C75C313E13DD8C144F9789F0138DEA7B31BE5B98BA44FD263DB279
 main_a
 Correct sig1: 9EFC917AAE547F81F3C2043EBD4EA6C7334E7190CD5B460CC4F17C39EC20B44FFC1C1F4398EB08FCD57E42CA6FB1848827D9AC487501FC299BE3E5A3378D954A
@@ -65,4 +65,4 @@ In hex: 0x45189c81eadee03202bfa06eaa15831789f0c76575508a563e1a739ca37b87be
 Fault: index=0x30c5, value=0xa1
 ```
 
-When the execution is complete, you can find the produced correct and faulty binary files ```main_a``` and ```main_a_faulted.out``` (respectively ```main_b``` and ```main_b_faulted.out```) at the root.
+When the execution is complete, you can find the correct and faulted binary files that produced the signatures, ```main_a``` and ```main_a_faulted.out``` (respectively ```main_b``` and ```main_b_faulted.out```) at the root.
