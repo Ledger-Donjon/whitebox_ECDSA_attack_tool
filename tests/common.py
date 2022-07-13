@@ -1,6 +1,6 @@
 from ecdsa.curves import NIST256p
 
-from signature import Signature
+from ecdsattack import Signature
 
 
 def _ecdsa_sign(msg: int, x: int, k: int) -> Signature:

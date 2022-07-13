@@ -13,10 +13,8 @@ digest2*(1)-digest1*(2)=> (r_good1 * digest2 - r_good2 * digest1) * x + digest2 
 """
 
 from ecdsa.curves import NIST256p
-from ecdsa.util import randrange
 
-from .common import _ecdsa_sign
-from signature import Signature
+from ..common import Signature
 
 
 def FDC3(
@@ -32,31 +30,6 @@ def FDC3(
     num = digest2 * (good1.s - bad1.s) - digest1 * (good2.s - bad2.s)
     denom = good1.r * (good2.s - bad2.s) - good2.r * (good1.s - bad1.s)
     n = NIST256p.order
+    if denom % n == 0:
+        return 0
     return (num * pow(denom, -1, n)) % n
-
-
-def _ecdsa_sign_with_fault(msg: int, x: int, k: int, e: int) -> Signature:
-    n = NIST256p.order
-
-    Q = k * NIST256p.generator
-    r = Q.x() % n
-    kinv = pow(k, n - 2, n)
-    s = ((kinv + e) * (msg + x * r)) % n
-    return Signature(msg, r, s)
-
-
-def test_fdc3():
-    n = NIST256p.order
-
-    msg1 = randrange(n)
-    msg2 = randrange(n)
-    k1 = randrange(n)
-    k2 = randrange(n)
-    x = randrange(n)
-    e = randrange(n)
-
-    sig1 = _ecdsa_sign(msg1, x, k1)
-    sig2 = _ecdsa_sign_with_fault(msg1, x, k1, e)
-    sig3 = _ecdsa_sign(msg2, x, k2)
-    sig4 = _ecdsa_sign_with_fault(msg2, x, k2, e)
-    assert FDC3(sig1, sig2, sig3, sig4) == x
