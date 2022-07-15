@@ -1,0 +1,30 @@
+[project]
+name = "ecdsattack"
+version = "0.2.0"
+description = "ecdsattack is a package which retrieves private keys from faulted ECDSA signatures."
+license = {file = "LICENSE"}
+readme = "README.md"
+maintainers = [
+  {name = "Adrian Thillard", email = "adrian.thillard@ledger.fr"},
+  {name = "Jean-Baptiste Bédrune", email = "jean-baptiste.bedrune@ledger.fr"}
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python"
+]
+
+dependencies = [
+  "ecdsa >= 0.17.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest >= 6.0.0"
+]
+
+[build-system]
+requires = [
+    "setuptools>=40.6.0",
+    "tomli"
+]
+build-backend = "setuptools.build_meta"
