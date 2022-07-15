@@ -26,7 +26,7 @@ DIGEST_B = 0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
 
 
 def inject_and_run(origin_file_name: str, fault=None):
-    copy_file_name = "faulted.out"
+    copy_file_name = origin_file_name + "_faulted"
     shutil.copy(origin_file_name, copy_file_name)
 
     if fault:
