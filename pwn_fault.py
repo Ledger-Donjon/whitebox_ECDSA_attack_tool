@@ -36,7 +36,7 @@ def inject_and_run(origin_file_name: str, fault=None):
             f.write(bytes([byte_value]))
     try:
         faulty_out = subprocess.check_output(
-            os.path.join(".", copy_file_name), timeout=3
+            os.path.join(".", copy_file_name), stderr=subprocess.DEVNULL, timeout=3
         ).decode()
     except (
         subprocess.CalledProcessError,
@@ -132,7 +132,9 @@ def ecdsa_fault_attack(challenge_id: int, fast_mode=False):
             nb_crashes += 1
         else:
             print("Found fault:", faulty_sigs)
-            d = recover_key(NIST256p, NIST256p.generator, public_key, correct_sigs, faulty_sigs)
+            d = recover_key(
+                NIST256p, NIST256p.generator, public_key, correct_sigs, faulty_sigs
+            )
             if d:
                 print("Found correct public point:", public_key)
                 print("Found private key:", d)
