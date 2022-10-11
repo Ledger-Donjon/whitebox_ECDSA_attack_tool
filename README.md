@@ -18,6 +18,14 @@ First, install the `ecdsattack` package:
 pip install .
 ```
 
+Install GCC 10. Every submission must be written in C accepted by GCC 10.2.0, according to the [WhibOx rules](https://whibox.io/contests/2021/rules). This is why our attack framework also uses this compiler.
+
+On Debian and Ubuntu based distributions, run:
+
+```shell
+sudo apt install gcc-10
+```
+
 Then, you need to download the challenges from the WhibOx website.
 The `download_challenges.py` script automatically downloads the required files:
 
