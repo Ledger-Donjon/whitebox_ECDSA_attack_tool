@@ -88,7 +88,7 @@ def load_public_key(challenge_id: int) -> Point:
     return public_key
 
 
-def ecdsa_fault_attack(challenge_id: int, fast_mode=False):
+def ecdsa_fault_attack(challenge_id: int, attack: str, fast_mode=False):
     public_key = load_public_key(challenge_id)
     print("Target pubkey:", public_key)
 
@@ -133,7 +133,8 @@ def ecdsa_fault_attack(challenge_id: int, fast_mode=False):
         else:
             print("Found fault:", faulty_sigs)
             d = recover_key(
-                NIST256p, NIST256p.generator, public_key, correct_sigs, faulty_sigs
+                NIST256p, NIST256p.generator, public_key,
+                correct_sigs, faulty_sigs, attack
             )
             if d:
                 print("Found correct public point:", public_key)
@@ -152,17 +153,24 @@ def ecdsa_fault_attack(challenge_id: int, fast_mode=False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("challenge_id", help="Challenge identifier to attack", type=int)
-
+    group = parser.add_mutually_exclusive_group()
     # The attack "F" has the highest success rate. Moreover, it only requires one couple of (correct,faulty) signature
     # Consequently, we allow for the possibility to deactivate every other attack.
-    parser.add_argument(
+    group.add_argument(
         "-f",
         "--fast",
         help="Perform only a single attack, with a high probability of success",
         action="store_true",
     )
+    group.add_argument(
+        "-a",
+        "--attack",
+        choices=("f", "fc1", "fc2", "fc3", "fc4", "fdc1", "fdc2", "fdc3"),
+        default=None,
+        help="Select one attack from f, fc1, fc2, fc3, fc4, fdc1, fdc2, fdc3",
+    )
     args = parser.parse_args()
-    ecdsa_fault_attack(args.challenge_id, args.fast)
+    ecdsa_fault_attack(args.challenge_id, args.attack, args.fast)
 
 
 if __name__ == "__main__":
